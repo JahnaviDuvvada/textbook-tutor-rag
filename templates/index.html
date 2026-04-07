@@ -1,0 +1,112 @@
+<!-- index.html -->
+<!-- Contains: Home page + PDF upload UI + inline upload JS -->
+<!-- Replaces: index.html + upload.js -->
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Textbook Tutor</title>
+  <link rel="stylesheet" href="/static/main.css" />
+</head>
+<body>
+
+  <div class="hero">
+    <h1>Textbook Tutor</h1>
+    <p class="subtitle">Upload your textbook PDF and start learning smarter</p>
+
+    <div class="upload-box" id="uploadBox">
+      <div class="upload-icon">📄</div>
+      <p>Drag &amp; drop your PDF here or click to browse</p>
+      <input type="file" id="pdfInput" accept=".pdf" hidden />
+      <button class="btn" onclick="document.getElementById('pdfInput').click()">
+        Choose PDF
+      </button>
+    </div>
+
+    <div id="fileName" class="file-name"></div>
+    <div id="statusMsg" class="status-msg"></div>
+
+    <button class="btn btn-primary" id="uploadBtn" onclick="uploadPDF()" disabled>
+      Upload &amp; Start
+    </button>
+  </div>
+
+  <script>
+    const input = document.getElementById("pdfInput");
+    const uploadBtn = document.getElementById("uploadBtn");
+    const fileName = document.getElementById("fileName");
+    const statusMsg = document.getElementById("statusMsg");
+
+    // Show selected file name and enable upload button
+    input.addEventListener("change", () => {
+      if (input.files.length > 0) {
+        fileName.textContent = "Selected: " + input.files[0].name;
+        uploadBtn.disabled = false;
+      }
+    });
+
+    // Drag and drop support
+    const uploadBox = document.getElementById("uploadBox");
+    uploadBox.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      uploadBox.classList.add("drag-over");
+    });
+    uploadBox.addEventListener("dragleave", () => {
+      uploadBox.classList.remove("drag-over");
+    });
+    uploadBox.addEventListener("drop", (e) => {
+      e.preventDefault();
+      uploadBox.classList.remove("drag-over");
+      const file = e.dataTransfer.files[0];
+      if (file && file.name.endsWith(".pdf")) {
+        input.files = e.dataTransfer.files;
+        fileName.textContent = "Selected: " + file.name;
+        uploadBtn.disabled = false;
+      } else {
+        statusMsg.textContent = "Please drop a PDF file.";
+        statusMsg.style.color = "red";
+      }
+    });
+
+    // Upload PDF to backend
+    async function uploadPDF() {
+      const file = input.files[0];
+      if (!file) return;
+
+      statusMsg.textContent = "Uploading and processing...";
+      statusMsg.style.color = "#555";
+      uploadBtn.disabled = true;
+
+      const formData = new FormData();
+      formData.append("pdf", file);
+
+      try {
+        const res = await fetch("/upload", {
+          method: "POST",
+          body: formData,
+        });
+        const data = await res.json();
+
+        if (res.ok) {
+          statusMsg.textContent = "Success! Redirecting...";
+          statusMsg.style.color = "green";
+          setTimeout(() => {
+            window.location.href = "/chat";
+          }, 1000);
+        } else {
+          statusMsg.textContent = "Error: " + data.error;
+          statusMsg.style.color = "red";
+          uploadBtn.disabled = false;
+        }
+      } catch (err) {
+        statusMsg.textContent = "Upload failed. Please try again.";
+        statusMsg.style.color = "red";
+        uploadBtn.disabled = false;
+      }
+    }
+  </script>
+
+</body>
+</html>

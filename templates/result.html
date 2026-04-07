@@ -1,0 +1,52 @@
+<!-- result.html -->
+<!-- Contains: Quiz result display + inline result JS -->
+<!-- Replaces: result.html + parts of chat.js -->
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Textbook Tutor - Results</title>
+  <link rel="stylesheet" href="/static/main.css" />
+</head>
+<body>
+
+  <div class="container result-page">
+    <h1>Quiz Results</h1>
+
+    <div class="result-card">
+      <div class="score-display" id="scoreDisplay">-</div>
+      <p id="scoreMsg" class="score-msg"></p>
+    </div>
+
+    <div class="result-actions">
+      <a href="/chat" class="btn btn-primary">Try Again</a>
+      <a href="/" class="btn">Upload New PDF</a>
+    </div>
+  </div>
+
+  <script>
+    // Read score from URL params e.g. /result?score=4&total=5
+    const params = new URLSearchParams(window.location.search);
+    const score = parseInt(params.get("score") || 0);
+    const total = parseInt(params.get("total") || 5);
+    const percent = Math.round((score / total) * 100);
+
+    document.getElementById("scoreDisplay").textContent = score + " / " + total;
+
+    const msg = document.getElementById("scoreMsg");
+    if (percent >= 80) {
+      msg.textContent = "Excellent work! You have a strong understanding.";
+      msg.style.color = "green";
+    } else if (percent >= 50) {
+      msg.textContent = "Good effort! Review the topics you missed.";
+      msg.style.color = "orange";
+    } else {
+      msg.textContent = "Keep practicing! Re-read the chapter and try again.";
+      msg.style.color = "red";
+    }
+  </script>
+
+</body>
+</html>

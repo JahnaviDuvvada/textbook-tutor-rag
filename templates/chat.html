@@ -1,0 +1,222 @@
+<!-- chat.html -->
+<!-- Contains: Q&A Chat + Quiz + Summary (tabbed interface) -->
+<!-- Replaces: chat.html + quiz.html + summary.html -->
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Textbook Tutor - Learn</title>
+  <link rel="stylesheet" href="/static/main.css" />
+</head>
+<body>
+
+  <div class="container">
+
+    <!-- Header -->
+    <div class="header">
+      <h1>Textbook Tutor</h1>
+      <a href="/" class="btn btn-sm">Upload New PDF</a>
+    </div>
+
+    <!-- Tabs -->
+    <div class="tabs">
+      <button class="tab active" onclick="switchTab('chat')">Q&amp;A Chat</button>
+      <button class="tab" onclick="switchTab('quiz')">Quiz</button>
+      <button class="tab" onclick="switchTab('summary')">Summary</button>
+    </div>
+
+    <!-- ── Q&A Chat Tab ── -->
+    <div id="tab-chat" class="tab-content active">
+      <div class="chat-box" id="chatBox">
+        <div class="bot-msg">Hi! Ask me anything about your textbook.</div>
+      </div>
+      <div class="chat-input-row">
+        <input
+          type="text"
+          id="chatInput"
+          class="chat-input"
+          placeholder="Ask a question..."
+          onkeydown="if(event.key==='Enter') sendMessage()"
+        />
+        <button class="btn btn-primary" onclick="sendMessage()">Send</button>
+      </div>
+    </div>
+
+    <!-- ── Quiz Tab ── -->
+    <div id="tab-quiz" class="tab-content">
+      <div class="center-action">
+        <p>Generate a 5-question quiz based on your textbook.</p>
+        <button class="btn btn-primary" onclick="generateQuiz()">Generate Quiz</button>
+      </div>
+      <div id="quizOutput" class="output-box"></div>
+      <div id="quizSubmitArea" style="display:none; margin-top:1rem;">
+        <button class="btn btn-primary" onclick="submitQuiz()">Submit Answers</button>
+      </div>
+    </div>
+
+    <!-- ── Summary Tab ── -->
+    <div id="tab-summary" class="tab-content">
+      <div class="center-action">
+        <p>Get a concise summary of your textbook content.</p>
+        <button class="btn btn-primary" onclick="generateSummary()">Generate Summary</button>
+      </div>
+      <div id="summaryOutput" class="output-box"></div>
+    </div>
+
+  </div>
+
+  <script>
+    // ── Tab switching ──────────────────────────────────────────────
+    function switchTab(name) {
+      document.querySelectorAll(".tab-content").forEach(t => t.classList.remove("active"));
+      document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+      document.getElementById("tab-" + name).classList.add("active");
+      event.target.classList.add("active");
+    }
+
+    // ── Q&A Chat ───────────────────────────────────────────────────
+    async function sendMessage() {
+      const input = document.getElementById("chatInput");
+      const message = input.value.trim();
+      if (!message) return;
+
+      appendMessage("user", message);
+      input.value = "";
+      appendMessage("bot", "Thinking...");
+
+      try {
+        const res = await fetch("/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message }),
+        });
+        const data = await res.json();
+        removeLastBotMsg();
+        if (res.ok) {
+          appendMessage("bot", data.answer);
+        } else {
+          appendMessage("bot", "Error: " + data.error);
+        }
+      } catch {
+        removeLastBotMsg();
+        appendMessage("bot", "Something went wrong. Please try again.");
+      }
+    }
+
+    function appendMessage(role, text) {
+      const box = document.getElementById("chatBox");
+      const div = document.createElement("div");
+      div.className = role === "user" ? "user-msg" : "bot-msg";
+      div.textContent = text;
+      box.appendChild(div);
+      box.scrollTop = box.scrollHeight;
+    }
+
+    function removeLastBotMsg() {
+      const box = document.getElementById("chatBox");
+      const msgs = box.querySelectorAll(".bot-msg");
+      if (msgs.length > 0) msgs[msgs.length - 1].remove();
+    }
+
+    // ── Quiz ───────────────────────────────────────────────────────
+    let quizData = [];
+
+    async function generateQuiz() {
+      const output = document.getElementById("quizOutput");
+      output.innerHTML = "<p>Generating quiz...</p>";
+      document.getElementById("quizSubmitArea").style.display = "none";
+
+      try {
+        const res = await fetch("/quiz", { method: "POST" });
+        const data = await res.json();
+
+        if (res.ok) {
+          quizData = parseQuiz(data.quiz);
+          renderQuiz(quizData);
+          document.getElementById("quizSubmitArea").style.display = "block";
+        } else {
+          output.innerHTML = "<p style='color:red'>Error: " + data.error + "</p>";
+        }
+      } catch {
+        output.innerHTML = "<p style='color:red'>Failed to generate quiz.</p>";
+      }
+    }
+
+    function parseQuiz(text) {
+      const questions = [];
+      const blocks = text.split(/\n(?=Q:)/);
+      for (const block of blocks) {
+        const lines = block.trim().split("\n");
+        const q = { question: "", options: [], answer: "" };
+        for (const line of lines) {
+          if (line.startsWith("Q:")) q.question = line.slice(2).trim();
+          else if (/^[A-D]\)/.test(line)) q.options.push(line.trim());
+          else if (line.startsWith("Answer:")) q.answer = line.slice(7).trim();
+        }
+        if (q.question) questions.push(q);
+      }
+      return questions;
+    }
+
+    function renderQuiz(questions) {
+      const output = document.getElementById("quizOutput");
+      output.innerHTML = "";
+      questions.forEach((q, i) => {
+        const div = document.createElement("div");
+        div.className = "quiz-question";
+        div.innerHTML = `<p><strong>Q${i+1}: ${q.question}</strong></p>` +
+          q.options.map(opt => `
+            <label class="quiz-option">
+              <input type="radio" name="q${i}" value="${opt[0]}" />
+              ${opt}
+            </label>`).join("");
+        output.appendChild(div);
+      });
+    }
+
+    function submitQuiz() {
+      let score = 0;
+      quizData.forEach((q, i) => {
+        const selected = document.querySelector(`input[name="q${i}"]:checked`);
+        const allOptions = document.querySelectorAll(`input[name="q${i}"]`);
+        allOptions.forEach(opt => {
+          const label = opt.parentElement;
+          if (opt.value === q.answer) label.style.color = "green";
+          else if (opt.checked) label.style.color = "red";
+          opt.disabled = true;
+        });
+        if (selected && selected.value === q.answer) score++;
+      });
+
+      const output = document.getElementById("quizOutput");
+      const result = document.createElement("div");
+      result.className = "quiz-result";
+      result.textContent = `Your Score: ${score} / ${quizData.length}`;
+      output.prepend(result);
+      document.getElementById("quizSubmitArea").style.display = "none";
+    }
+
+    // ── Summary ────────────────────────────────────────────────────
+    async function generateSummary() {
+      const output = document.getElementById("summaryOutput");
+      output.innerHTML = "<p>Generating summary...</p>";
+
+      try {
+        const res = await fetch("/summary", { method: "POST" });
+        const data = await res.json();
+
+        if (res.ok) {
+          output.innerHTML = "<pre class='summary-text'>" + data.summary + "</pre>";
+        } else {
+          output.innerHTML = "<p style='color:red'>Error: " + data.error + "</p>";
+        }
+      } catch {
+        output.innerHTML = "<p style='color:red'>Failed to generate summary.</p>";
+      }
+    }
+  </script>
+
+</body>
+</html>
