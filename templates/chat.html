@@ -1,6 +1,4 @@
-<!-- chat.html -->
-<!-- Contains: Q&A Chat + Quiz + Summary (tabbed interface) -->
-<!-- Replaces: chat.html + quiz.html + summary.html -->
+<!-- chat.html (FULLY FIXED VERSION) -->
 
 <!DOCTYPE html>
 <html lang="en">
@@ -27,24 +25,20 @@
       <button class="tab" onclick="switchTab('summary')">Summary</button>
     </div>
 
-    <!-- ── Q&A Chat Tab ── -->
+    <!-- Chat Tab -->
     <div id="tab-chat" class="tab-content active">
       <div class="chat-box" id="chatBox">
         <div class="bot-msg">Hi! Ask me anything about your textbook.</div>
       </div>
       <div class="chat-input-row">
-        <input
-          type="text"
-          id="chatInput"
-          class="chat-input"
+        <input type="text" id="chatInput" class="chat-input"
           placeholder="Ask a question..."
-          onkeydown="if(event.key==='Enter') sendMessage()"
-        />
+          onkeydown="if(event.key==='Enter') sendMessage()" />
         <button class="btn btn-primary" onclick="sendMessage()">Send</button>
       </div>
     </div>
 
-    <!-- ── Quiz Tab ── -->
+    <!-- Quiz Tab -->
     <div id="tab-quiz" class="tab-content">
       <div class="center-action">
         <p>Generate a 5-question quiz based on your textbook.</p>
@@ -56,7 +50,7 @@
       </div>
     </div>
 
-    <!-- ── Summary Tab ── -->
+    <!-- Summary Tab -->
     <div id="tab-summary" class="tab-content">
       <div class="center-action">
         <p>Get a concise summary of your textbook content.</p>
@@ -68,7 +62,6 @@
   </div>
 
   <script>
-    // ── Tab switching ──────────────────────────────────────────────
     function switchTab(name) {
       document.querySelectorAll(".tab-content").forEach(t => t.classList.remove("active"));
       document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
@@ -76,7 +69,7 @@
       event.target.classList.add("active");
     }
 
-    // ── Q&A Chat ───────────────────────────────────────────────────
+    // Chat
     async function sendMessage() {
       const input = document.getElementById("chatInput");
       const message = input.value.trim();
@@ -94,14 +87,10 @@
         });
         const data = await res.json();
         removeLastBotMsg();
-        if (res.ok) {
-          appendMessage("bot", data.answer);
-        } else {
-          appendMessage("bot", "Error: " + data.error);
-        }
+        appendMessage("bot", res.ok ? data.answer : "Error: " + data.error);
       } catch {
         removeLastBotMsg();
-        appendMessage("bot", "Something went wrong. Please try again.");
+        appendMessage("bot", "Something went wrong.");
       }
     }
 
@@ -120,7 +109,7 @@
       if (msgs.length > 0) msgs[msgs.length - 1].remove();
     }
 
-    // ── Quiz ───────────────────────────────────────────────────────
+    // QUIZ
     let quizData = [];
 
     async function generateQuiz() {
@@ -147,14 +136,20 @@
     function parseQuiz(text) {
       const questions = [];
       const blocks = text.split(/\n(?=Q:)/);
+
       for (const block of blocks) {
         const lines = block.trim().split("\n");
         const q = { question: "", options: [], answer: "" };
+
         for (const line of lines) {
           if (line.startsWith("Q:")) q.question = line.slice(2).trim();
           else if (/^[A-D]\)/.test(line)) q.options.push(line.trim());
-          else if (line.startsWith("Answer:")) q.answer = line.slice(7).trim();
+          else if (line.startsWith("Answer:")) {
+            // ✅ FIX: extract only A/B/C/D
+            q.answer = line.slice(7).trim()[0];
+          }
         }
+
         if (q.question) questions.push(q);
       }
       return questions;
@@ -163,42 +158,63 @@
     function renderQuiz(questions) {
       const output = document.getElementById("quizOutput");
       output.innerHTML = "";
+
       questions.forEach((q, i) => {
         const div = document.createElement("div");
         div.className = "quiz-question";
+
         div.innerHTML = `<p><strong>Q${i+1}: ${q.question}</strong></p>` +
           q.options.map(opt => `
             <label class="quiz-option">
               <input type="radio" name="q${i}" value="${opt[0]}" />
               ${opt}
             </label>`).join("");
+
         output.appendChild(div);
       });
     }
 
     function submitQuiz() {
       let score = 0;
+
       quizData.forEach((q, i) => {
         const selected = document.querySelector(`input[name="q${i}"]:checked`);
-        const allOptions = document.querySelectorAll(`input[name="q${i}"]`);
-        allOptions.forEach(opt => {
+        const options = document.querySelectorAll(`input[name="q${i}"]`);
+
+        options.forEach(opt => {
           const label = opt.parentElement;
-          if (opt.value === q.answer) label.style.color = "green";
-          else if (opt.checked) label.style.color = "red";
+
+          // Reset classes
+          label.classList.remove("correct", "wrong", "correct-bg", "wrong-bg");
+
+          // ✅ Correct answer
+          if (opt.value === q.answer) {
+            label.classList.add("correct", "correct-bg");
+          }
+
+          // ❌ Wrong selected
+          if (opt.checked && opt.value !== q.answer) {
+            label.classList.add("wrong", "wrong-bg");
+          }
+
           opt.disabled = true;
         });
+
         if (selected && selected.value === q.answer) score++;
       });
 
       const output = document.getElementById("quizOutput");
+
       const result = document.createElement("div");
       result.className = "quiz-result";
       result.textContent = `Your Score: ${score} / ${quizData.length}`;
+
       output.prepend(result);
+
       document.getElementById("quizSubmitArea").style.display = "none";
     }
 
-    // ── Summary ────────────────────────────────────────────────────
+    // Summary
     async function generateSummary() {
       const output = document.getElementById("summaryOutput");
       output.innerHTML = "<p>Generating summary...</p>";
@@ -207,11 +223,9 @@
         const res = await fetch("/summary", { method: "POST" });
         const data = await res.json();
 
-        if (res.ok) {
-          output.innerHTML = "<pre class='summary-text'>" + data.summary + "</pre>";
-        } else {
-          output.innerHTML = "<p style='color:red'>Error: " + data.error + "</p>";
-        }
+        output.innerHTML = res.ok
+          ? "<pre class='summary-text'>" + data.summary + "</pre>"
+          : "<p style='color:red'>Error: " + data.error + "</p>";
       } catch {
         output.innerHTML = "<p style='color:red'>Failed to generate summary.</p>";
       }
